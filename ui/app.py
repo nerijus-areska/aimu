@@ -89,6 +89,13 @@ class MusicPlayerApp(App):
         margin-bottom: 1;
     }
 
+    #info_volume {
+        dock: right;
+        width: 12;
+        height: 100%;
+        content-align: center middle;
+    }
+
     #status_text {
         width: 1fr;
     }
@@ -122,6 +129,8 @@ class MusicPlayerApp(App):
         ("f", "feedback", "Feedback"),
         ("left", "seek_backward", "- 10s"),
         ("right", "seek_forward", "+ 10s"),
+        ("z", "volume_down", "Vol -"),
+        ("x", "volume_up", "Vol +"),
     ]
 
     def __init__(self):
@@ -132,6 +141,7 @@ class MusicPlayerApp(App):
         self.current_index = -1
         self.highlighted_index = -1
         self.station_mode = False
+        self.volume_level: int = DEFAULT_VOLUME // 10
         self.audio.set_volume(DEFAULT_VOLUME)
 
     def compose(self) -> ComposeResult:
@@ -189,6 +199,7 @@ class MusicPlayerApp(App):
             self.notify("No tracks found in database. Run scan_mp3_to_db.py first.", severity="warning")
 
         self.set_interval(0.5, self.check_playback_status)
+        self.query_one(TrackInfoPanel).update_volume(self.volume_level)
 
     # ── Station mode ──────────────────────────────────────────────────────────
 
@@ -288,6 +299,18 @@ class MusicPlayerApp(App):
             FeedbackModal(track_name=song["name"], existing=song.get("feedback") or ""),
             on_result,
         )
+
+    def action_volume_up(self) -> None:
+        if self.volume_level < 10:
+            self.volume_level += 1
+            self.audio.set_volume(self.volume_level * 10)
+            self.query_one(TrackInfoPanel).update_volume(self.volume_level)
+
+    def action_volume_down(self) -> None:
+        if self.volume_level > 1:
+            self.volume_level -= 1
+            self.audio.set_volume(self.volume_level * 10)
+            self.query_one(TrackInfoPanel).update_volume(self.volume_level)
 
     def action_seek_backward(self):
         self.audio.seek_relative(-10)

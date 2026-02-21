@@ -83,6 +83,10 @@ class AudioEngine:
         """Set volume (0 to 100)."""
         self._player.audio_set_volume(volume)
 
+    def get_volume(self) -> int:
+        """Return current volume (0 to 100)."""
+        return self._player.audio_get_volume()
+
 # --- Quick Test Block ---
 # This allows you to run 'python core/audio.py' to verify it works
 # without building the whole UI yet.

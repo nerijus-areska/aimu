@@ -19,8 +19,20 @@ class TrackInfoPanel(Container):
         yield Label("", id="info_date")
         yield Label("", id="info_bpm")
         yield Label("", id="info_rating")
+        yield Label("", id="info_volume")
         yield Label("", id="info_feedback_sep")
         yield Label("", id="info_feedback")
+
+    def _volume_bar(self, level: int) -> str:
+        lines = ["[dim]VOLUME[/dim]"]
+        for i in range(10, 0, -1):
+            block = "[green]█[/green]" if i <= level else "[dim]░[/dim]"
+            marker = " [bold green]◄[/bold green]" if i == level else ""
+            lines.append(f"  {block} {i:2d}{marker}")
+        return "\n".join(lines)
+
+    def update_volume(self, level: int) -> None:
+        self.query_one("#info_volume", Label).update(self._volume_bar(level))
 
     def set_track(self, song: dict | None, is_playing: bool = False) -> None:
         """Update the panel to show metadata for the given song."""
