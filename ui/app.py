@@ -5,13 +5,17 @@ from textual.containers import Container, Horizontal
 
 from core.audio import AudioEngine
 from core.db import MusicDatabase
-from config import DEFAULT_VOLUME, DB_PATH
+from core.keybindings import load_bindings
+from config import DEFAULT_VOLUME, DB_PATH, KEYBINDINGS_PATH
 from ui.playlist import TrackListView
 from ui.status_bar import PlayerControlBar
 from ui.track_info import TrackInfoPanel
 from ui.station_view import StationView
 from ui.feedback_modal import FeedbackModal
+from ui.help_modal import HelpModal
 from pathlib import Path
+
+_BINDINGS = load_bindings(KEYBINDINGS_PATH)
 
 
 class MusicPlayerApp(App):
@@ -119,19 +123,7 @@ class MusicPlayerApp(App):
     }
     """
 
-    BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("space", "toggle_pause", "Pause/Resume"),
-        ("n", "next_song", "Next"),
-        ("]", "rating_up", "Rating +1"),
-        ("[", "rating_down", "Rating -1"),
-        ("s", "toggle_station", "Station"),
-        ("f", "feedback", "Feedback"),
-        ("left", "seek_backward", "- 10s"),
-        ("right", "seek_forward", "+ 10s"),
-        ("z", "volume_down", "Vol -"),
-        ("x", "volume_up", "Vol +"),
-    ]
+    BINDINGS = _BINDINGS
 
     def __init__(self):
         super().__init__()
@@ -200,6 +192,11 @@ class MusicPlayerApp(App):
 
         self.set_interval(0.5, self.check_playback_status)
         self.query_one(TrackInfoPanel).update_volume(self.volume_level)
+
+    # ── Help overlay ──────────────────────────────────────────────────────────
+
+    def action_help(self) -> None:
+        self.push_screen(HelpModal(load_bindings(KEYBINDINGS_PATH), KEYBINDINGS_PATH))
 
     # ── Station mode ──────────────────────────────────────────────────────────
 
