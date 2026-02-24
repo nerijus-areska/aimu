@@ -28,7 +28,7 @@ class MusicDatabase:
         self._migrate()
 
     def _create_table(self):
-        """Create the music_files table if it doesn't exist."""
+        """Create the music_files and feedback tables if they don't exist."""
         cursor = self.conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS music_files (
@@ -44,7 +44,20 @@ class MusicDatabase:
                 tracknumber TEXT,
                 genre TEXT,
                 date TEXT,
-                feedback TEXT
+                feedback TEXT,
+                mood_pleasure REAL,
+                mood_arousal REAL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT NOT NULL,
+                mood_pleasure REAL,
+                mood_arousal REAL,
+                rating INTEGER,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (path) REFERENCES music_files(path)
             )
         """)
         self.conn.commit()
@@ -54,10 +67,16 @@ class MusicDatabase:
         cursor = self.conn.cursor()
         cursor.execute("PRAGMA table_info(music_files)")
         existing = {row[1] for row in cursor.fetchall()}
-        if "feedback" not in existing:
-            cursor.execute("ALTER TABLE music_files ADD COLUMN feedback TEXT")
-            self.conn.commit()
-    
+        migrations = [
+            ("feedback", "ALTER TABLE music_files ADD COLUMN feedback TEXT"),
+            ("mood_pleasure", "ALTER TABLE music_files ADD COLUMN mood_pleasure REAL"),
+            ("mood_arousal", "ALTER TABLE music_files ADD COLUMN mood_arousal REAL"),
+        ]
+        for column, sql in migrations:
+            if column not in existing:
+                cursor.execute(sql)
+        self.conn.commit()
+
     def _recreate_table(self):
         """Drop and recreate the table with new schema. Use only when you want to reset the database."""
         cursor = self.conn.cursor()
@@ -76,7 +95,9 @@ class MusicDatabase:
                 tracknumber TEXT,
                 genre TEXT,
                 date TEXT,
-                feedback TEXT
+                feedback TEXT,
+                mood_pleasure REAL,
+                mood_arousal REAL
             )
         """)
         self.conn.commit()
@@ -151,25 +172,28 @@ class MusicDatabase:
 
     def get_all_files(self) -> list[dict]:
         """
-        Retrieve all files from the database.
-        
+        Retrieve all files from the database, with latest feedback per track.
+
         Returns:
             List of dictionaries with all metadata fields
         """
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT path, rating, duration, bitrate, album, bpm, title, artist,
-                   albumartist, tracknumber, genre, date, feedback
-            FROM music_files
+            SELECT m.path, m.rating, m.duration, m.bitrate, m.album, m.bpm,
+                   m.title, m.artist, m.albumartist, m.tracknumber, m.genre,
+                   m.date, m.feedback,
+                   f.mood_pleasure, f.mood_arousal, f.rating AS f_rating
+            FROM music_files m
+            LEFT JOIN feedback f ON f.path = m.path
+                AND f.id = (SELECT MAX(f2.id) FROM feedback f2 WHERE f2.path = m.path)
         """)
         rows = cursor.fetchall()
-        
-        # Convert Row objects to dictionaries explicitly
+
         result = []
         for row in rows:
             result.append({
                 "path": row["path"],
-                "rating": row["rating"],
+                "rating": row["f_rating"] if row["f_rating"] is not None else row["rating"],
                 "duration": row["duration"],
                 "bitrate": row["bitrate"],
                 "album": row["album"],
@@ -181,9 +205,32 @@ class MusicDatabase:
                 "genre": row["genre"],
                 "date": row["date"],
                 "feedback": row["feedback"],
+                "mood_pleasure": row["mood_pleasure"],
+                "mood_arousal": row["mood_arousal"],
             })
-        
+
         return result
+
+    def get_feedback_history(self, file_path: str) -> list[dict]:
+        """Return all feedback entries for a track, newest first."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT mood_pleasure, mood_arousal, rating FROM feedback WHERE path = ? ORDER BY id DESC",
+            (file_path,),
+        )
+        return [
+            {"mood_pleasure": r["mood_pleasure"], "mood_arousal": r["mood_arousal"], "rating": r["rating"]}
+            for r in cursor.fetchall()
+        ]
+
+    def add_feedback(self, file_path: str, mood_pleasure: float, mood_arousal: float, rating: int) -> None:
+        """Insert a new feedback record for a track (never updates)."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO feedback (path, mood_pleasure, mood_arousal, rating) VALUES (?, ?, ?, ?)",
+            (file_path, mood_pleasure, mood_arousal, rating),
+        )
+        self.conn.commit()
 
     def update_feedback(self, file_path: str, feedback: str):
         """Update the feedback text for a specific file."""
@@ -191,21 +238,6 @@ class MusicDatabase:
         cursor.execute(
             "UPDATE music_files SET feedback = ? WHERE path = ?",
             (feedback, file_path)
-        )
-        self.conn.commit()
-
-    def update_rating(self, file_path: str, rating: int):
-        """
-        Update the rating for a specific file.
-        
-        Args:
-            file_path: Absolute path to the music file
-            rating: New rating value
-        """
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "UPDATE music_files SET rating = ? WHERE path = ?",
-            (rating, file_path)
         )
         self.conn.commit()
 

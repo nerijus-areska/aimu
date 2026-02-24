@@ -177,6 +177,8 @@ class MusicPlayerApp(App):
                     "genre": file_entry.get("genre"),
                     "date": file_entry.get("date"),
                     "feedback": file_entry.get("feedback"),
+                    "mood_pleasure": file_entry.get("mood_pleasure"),
+                    "mood_arousal": file_entry.get("mood_arousal"),
                 })
             except Exception:
                 continue
@@ -269,39 +271,42 @@ class MusicPlayerApp(App):
             return
         song = self.songs[self.highlighted_index]
         is_playing = self.highlighted_index == self.current_index
-        panel.set_track(song, is_playing=is_playing)
+        feedback_history = self.db.get_feedback_history(song["path"])
+        panel.set_track(song, is_playing=is_playing, feedback_history=feedback_history)
 
     # ── Actions ───────────────────────────────────────────────────────────────
-
-    def action_rating_up(self):
-        self._adjust_rating(1)
-
-    def action_rating_down(self):
-        self._adjust_rating(-1)
-
-    def _adjust_rating(self, delta: int) -> None:
-        if self.highlighted_index < 0 or self.highlighted_index >= len(self.songs):
-            return
-        song = self.songs[self.highlighted_index]
-        new_rating = max(0, min(5, (song.get("rating") or 0) + delta))
-        song["rating"] = new_rating
-        self.db.update_rating(song["path"], new_rating)
-        self._update_info_panel()
 
     def action_feedback(self) -> None:
         if self.highlighted_index < 0 or self.highlighted_index >= len(self.songs):
             return
         song = self.songs[self.highlighted_index]
 
-        def on_result(text: str | None) -> None:
-            if text is None:
+        # Clamp existing mood/rating into the ranges the modal expects.
+        pleasure = int(song.get("mood_pleasure") or 3)
+        arousal  = int(song.get("mood_arousal")  or 3)
+        rating   = max(1, min(3, int(song.get("rating") or 2)))
+
+        def on_result(result: dict | None) -> None:
+            if result is None:
                 return
-            song["feedback"] = text
-            self.db.update_feedback(song["path"], text)
+            song["mood_pleasure"] = result["mood_pleasure"]
+            song["mood_arousal"]  = result["mood_arousal"]
+            song["rating"]        = result["rating"]
+            self.db.add_feedback(
+                song["path"],
+                result["mood_pleasure"],
+                result["mood_arousal"],
+                result["rating"],
+            )
             self._update_info_panel()
 
         self.push_screen(
-            FeedbackModal(track_name=song["name"], existing=song.get("feedback") or ""),
+            FeedbackModal(
+                track_name=song["name"],
+                pleasure=pleasure,
+                arousal=arousal,
+                rating=rating,
+            ),
             on_result,
         )
 

@@ -1,8 +1,13 @@
-import textwrap
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.widgets import Label
 from ui.waveform import WaveformWidget
+
+
+def _squares(value: int, total: int, color: str) -> str:
+    """Render spaced filled/empty squares, e.g. '■ ■ □ □ □'."""
+    parts = [f"[{color}]■[/{color}]"] * value + ["[dim]□[/dim]"] * (total - value)
+    return " ".join(parts)
 
 
 class TrackInfoPanel(Container):
@@ -18,7 +23,6 @@ class TrackInfoPanel(Container):
         yield Label("", id="info_genre")
         yield Label("", id="info_date")
         yield Label("", id="info_bpm")
-        yield Label("", id="info_rating")
         yield Label("", id="info_volume")
         yield Label("", id="info_feedback_sep")
         yield Label("", id="info_feedback")
@@ -34,11 +38,16 @@ class TrackInfoPanel(Container):
     def update_volume(self, level: int) -> None:
         self.query_one("#info_volume", Label).update(self._volume_bar(level))
 
-    def set_track(self, song: dict | None, is_playing: bool = False) -> None:
+    def set_track(
+        self,
+        song: dict | None,
+        is_playing: bool = False,
+        feedback_history: list[dict] | None = None,
+    ) -> None:
         """Update the panel to show metadata for the given song."""
         all_ids = [
             "#info_now_playing", "#info_title", "#info_artist", "#info_sep",
-            "#info_album", "#info_genre", "#info_date", "#info_bpm", "#info_rating",
+            "#info_album", "#info_genre", "#info_date", "#info_bpm",
             "#info_feedback_sep", "#info_feedback",
         ]
 
@@ -82,30 +91,27 @@ class TrackInfoPanel(Container):
         self.query_one("#info_date",  Label).update(row("yellow",      "◆", "YEAR",   song.get("date")))
         self.query_one("#info_bpm",   Label).update(row("green",       "◆", "BPM",    song.get("bpm")))
 
-        # Rating — filled / empty blocks
-        rating = song.get("rating")
-        if rating is not None:
-            filled = "[green]■[/green] " * int(rating)
-            empty  = "[dim]□[/dim] "  * (5 - int(rating))
-            self.query_one("#info_rating", Label).update(
-                f"\n  [bold orange1]◆ RATING [/bold orange1]  {filled.strip()} {empty.strip()}"
-            )
-        else:
-            self.query_one("#info_rating", Label).update("")
+        # Feedback history
+        entries = feedback_history or []
+        if entries:
+            lines = [
+                "\n[dim]  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·[/dim]",
+                "",
+                "  [bold cyan]◆ FEEDBACK[/bold cyan]",
+            ]
+            for i, entry in enumerate(entries):
+                mood = _squares(int(entry.get("mood_pleasure") or 0), 5, "magenta")
+                energy = _squares(int(entry.get("mood_arousal") or 0), 5, "yellow")
+                rating = _squares(int(entry.get("rating") or 0), 3, "green")
+                lines.append("")
+                lines.append(f"  [dim]MOOD  [/dim]  {mood}")
+                lines.append(f"  [dim]ENERGY[/dim]  {energy}")
+                lines.append(f"  [dim]RATING[/dim]  {rating}")
+                if i < len(entries) - 1:
+                    lines.append("  [dim]─ ─ ─ ─ ─ ─ ─ ─[/dim]")
 
-        # Feedback notes
-        feedback = (song.get("feedback") or "").strip()
-        if feedback:
-            self.query_one("#info_feedback_sep", Label).update(
-                "\n[dim]  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·[/dim]"
-            )
-            wrapped = []
-            for line in feedback.splitlines():
-                wrapped.extend(textwrap.wrap(line, width=50) or [""])
-            lines = "\n".join(f"  {line}" for line in wrapped)
-            self.query_one("#info_feedback", Label).update(
-                f"\n  [bold cyan]◆ NOTES  [/bold cyan]\n[dim]{lines}[/dim]"
-            )
+            self.query_one("#info_feedback_sep", Label).update("")
+            self.query_one("#info_feedback", Label).update("\n".join(lines))
         else:
             self.query_one("#info_feedback_sep", Label).update("")
             self.query_one("#info_feedback", Label).update("")

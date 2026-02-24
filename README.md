@@ -1,13 +1,35 @@
-# AIMU
+# AIMU — AI Music Player
 
-A terminal-based music player (TUI) for your MP3 library, built with [Textual](https://github.com/Textualize/textual).
+A terminal-based music player that learns your taste. Browse your MP3 library, listen to tracks, and give feedback — mood, energy, and rating — that will be used by AI to recommend music tailored to you.
 
-Features a track browser, playback controls, a star rating system, per-track notes, and an ambient "station" mode.
+Built with [Textual](https://github.com/Textualize/textual), [python-vlc](https://github.com/oaubert/python-vlc), and SQLite.
+
+![Giving feedback](screenshots/giving_feedback.png)
+
+## Core Feature: Feedback
+
+Every time you listen to a track, you can rate it across three dimensions:
+
+- **Mood** (1–5) — how happy / pleasant the track feels
+- **Energy** (1–5) — how energetic / arousing the track feels
+- **Rating** (1–3) — your overall preference
+
+Feedback is stored as an append-only log: every submission creates a new record, so your history of impressions is preserved. The info panel displays all past feedback entries for the selected track as visual square indicators.
+
+![Track with feedback history](screenshots/track_with_2_feedbacks.png)
+
+This data is designed to feed into an AI recommendation engine, giving it a rich signal of how your perception of a track changes over time.
+
+## Station Mode
+
+An ambient auto-play mode that picks tracks randomly, weighted by your ratings — higher-rated songs play more often. A particle field animation accompanies playback.
+
+![Station mode](screenshots/station_view.png)
 
 ## Requirements
 
 - Python 3.10+
-- [VLC Media Player](https://www.videolan.org/vlc/) (must be installed as a system application)
+- [VLC Media Player](https://www.videolan.org/vlc/)
 
 ```bash
 # macOS
@@ -30,19 +52,17 @@ pip install -r requirements.txt
 
 ### 1. Scan your music library
 
-Point the scanner at a directory containing MP3 files. It will recursively find all tracks and store their metadata in a local SQLite database (`music.db`).
-
 ```bash
 python scan_mp3_to_db.py /path/to/your/music
 ```
 
-Options:
+This recursively finds all MP3 files and stores their metadata in a local SQLite database (`music.db`).
 
 | Flag | Description |
 |------|-------------|
-| `--db-path PATH` | Use a custom database file location |
-| `--rating N` | Set a default star rating (0–5) for newly added tracks |
-| `--no-metadata` | Skip reading ID3 tags (faster scan) |
+| `--db-path PATH` | Custom database file location |
+| `--rating N` | Default rating (0–5) for new tracks |
+| `--no-metadata` | Skip reading ID3 tags |
 
 ### 2. Launch the player
 
@@ -56,34 +76,15 @@ python main.py
 |-----|--------|
 | `Enter` | Play selected track |
 | `Space` | Pause / Resume |
-| `N` | Skip to next track |
-| `←` / `→` | Seek backward / forward 10 seconds |
-| `[` / `]` | Decrease / Increase rating |
-| `F` | Open feedback / notes for current track |
-| `S` | Toggle station mode (ambient auto-play) |
+| `N` | Next track |
+| `W` / `S` | Volume up / down |
+| `Left` / `Right` | Seek -/+ 10 seconds |
+| `F` | Open feedback modal |
+| `X` | Toggle station mode |
+| `H` | Help overlay |
 | `Q` | Quit |
 
-## Project Structure
-
-```
-aimu/
-├── main.py               # Entry point
-├── config.py             # DB path and default volume
-├── scan_mp3_to_db.py     # CLI tool to import music metadata
-├── requirements.txt
-├── core/
-│   ├── audio.py          # VLC playback engine
-│   └── db.py             # SQLite database interface
-└── ui/
-    ├── app.py            # Main Textual app and controller
-    ├── playlist.py       # Track list widget
-    ├── status_bar.py     # Progress bar and time display
-    ├── track_info.py     # Metadata and rating panel
-    ├── station_view.py   # Ambient station mode view
-    ├── feedback_modal.py # Per-track notes dialog
-    ├── waveform.py       # Animated waveform decoration
-    └── particles.py      # Ambient particle field animation
-```
+Keybindings are customizable via `keybindings.json`.
 
 ## License
 
