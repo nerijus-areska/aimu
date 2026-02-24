@@ -226,13 +226,21 @@ class MusicPlayerApp(App):
     # ── Playback ──────────────────────────────────────────────────────────────
 
     def on_data_table_row_highlighted(self, message: TrackListView.RowHighlighted) -> None:
+        if message.data_table.id != "playlist":
+            return
         row_key = message.row_key.value
+        if not row_key:
+            return
         index_str, _ = row_key.split("|", 1)
         self.highlighted_index = int(index_str)
         self._update_info_panel()
 
     def on_data_table_row_selected(self, message: TrackListView.RowSelected) -> None:
+        if message.data_table.id != "playlist":
+            return
         row_key = message.row_key.value
+        if not row_key:
+            return
         index_str, _ = row_key.split("|", 1)
         self.play_track(int(index_str))
 

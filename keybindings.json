@@ -1,0 +1,14 @@
+{
+  "help": "h",
+  "quit": "q",
+  "toggle_pause": "space",
+  "next_song": "n",
+  "rating_up": "]",
+  "rating_down": "[",
+  "toggle_station": "x",
+  "feedback": "f",
+  "seek_backward": "left",
+  "seek_forward": "right",
+  "volume_down": "s",
+  "volume_up": "w"
+}
