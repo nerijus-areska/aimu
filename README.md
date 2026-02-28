@@ -1,30 +1,40 @@
-# AIMU — AI Music Player
+# AIMU — Music Player
 
-A terminal-based music player that learns your taste. Browse your MP3 library, listen to tracks, and give feedback — mood, energy, and rating — that will be used by AI to recommend music tailored to you.
+A terminal-based music player built around mood. Browse your MP3 library, give feedback tied to how you feel right now, and let Station Mode use that context to pick tracks that fit your current state.
 
 Built with [Textual](https://github.com/Textualize/textual), [python-vlc](https://github.com/oaubert/python-vlc), and SQLite.
 
 ![Giving feedback](screenshots/giving_feedback.png)
 
-## Core Feature: Feedback
+## Core Feature: Mood Feedback
 
-Every time you listen to a track, you can rate it across three dimensions:
+Every time you listen to a track, you can rate it in the context of how you feel at that moment:
 
-- **Mood** (1–5) — how happy / pleasant the track feels
-- **Energy** (1–5) — how energetic / arousing the track feels
-- **Rating** (1–3) — your overall preference
+- **Mood** (1–5) — how happy / pleasant the track feels right now
+- **Energy** (1–5) — how energetic / arousing the track feels right now
+- **Rating** (1–3) — your overall preference in this context
 
-Feedback is stored as an append-only log: every submission creates a new record, so your history of impressions is preserved. The info panel displays all past feedback entries for the selected track as visual square indicators.
+Feedback is stored as an append-only log — every submission is a new record, so your history of impressions over time is preserved. The info panel shows all past feedback entries for the selected track as visual square indicators, displayed side by side.
 
 ![Track with feedback history](screenshots/track_with_2_feedbacks.png)
 
-This data is designed to feed into an AI recommendation engine, giving it a rich signal of how your perception of a track changes over time.
+The key insight: the same track can feel different depending on your current mood. Capturing both together builds a richer picture than a static rating ever could.
 
 ## Station Mode
 
-An ambient auto-play mode that picks tracks randomly, weighted by your ratings — higher-rated songs play more often. A particle field animation accompanies playback.
+Station Mode is an ambient auto-play mode. When you enter it, you set your current **Mood** and **Energy** state. The player then uses your feedback history to pick tracks that were rated well *in a similar mood context*, and avoids tracks that were rated poorly in that context.
 
 ![Station mode](screenshots/station_view.png)
+
+### How track selection works
+
+1. For each song, the closest past feedback entry to your current station mood is found using Euclidean distance on the mood/energy axes.
+2. That entry's rating is mapped to a score: poor (−1), ok (+1), great (+4).
+3. The score is scaled by proximity: an exact mood match carries full weight; a distant match is discounted.
+4. Songs with no feedback get a neutral score and participate in uniform random selection.
+5. Scores are mapped to a 1–5 scale (anchored at 0 → 3), then converted to exponential weights for random selection — ensuring well-matched tracks are strongly preferred and poorly-matched tracks are effectively excluded.
+
+The info panel shows each song's **Rating for Station** (1–5 squares) so you can see how the current track scores against your station mood.
 
 ## Requirements
 
@@ -69,6 +79,8 @@ This recursively finds all MP3 files and stores their metadata in a local SQLite
 ```bash
 python main.py
 ```
+
+Add `--debug` to log station selection scores to `debug.log`.
 
 ## Keybindings
 
