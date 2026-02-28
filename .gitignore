@@ -31,3 +31,6 @@ build/
 .idea/
 *.swp
 *.swo
+
+#Random
+debug.log

@@ -141,12 +141,14 @@ class FeedbackModal(ModalScreen):
         pleasure: int = 3,
         arousal:  int = 3,
         rating:   int = 2,
+        focus_rating: bool = False,
     ) -> None:
         super().__init__()
         self.track_name    = track_name
         self._pleasure_idx = max(1, min(5, pleasure)) - 1
         self._arousal_idx  = max(1, min(5, arousal))  - 1
         self._rating_idx   = max(1, min(3, rating))   - 1
+        self._focus_rating = focus_rating
 
     def compose(self) -> ComposeResult:
         with Vertical(id="feedback_dialog"):
@@ -164,7 +166,10 @@ class FeedbackModal(ModalScreen):
             )
 
     def on_mount(self) -> None:
-        self.query_one("#sel_mood").focus()
+        if self._focus_rating:
+            self.query_one("#sel_rating").focus()
+        else:
+            self.query_one("#sel_mood").focus()
 
     def action_save(self) -> None:
         self.dismiss({

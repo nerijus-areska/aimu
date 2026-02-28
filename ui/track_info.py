@@ -1,5 +1,5 @@
 from textual.app import ComposeResult
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.widgets import Label
 from ui.waveform import WaveformWidget
 
@@ -23,6 +23,9 @@ class TrackInfoPanel(Container):
         yield Label("", id="info_genre")
         yield Label("", id="info_date")
         yield Label("", id="info_bpm")
+        with Horizontal(id="info_station_row"):
+            yield Label("", id="info_station_mood")
+            yield Label("", id="info_station_rating")
         yield Label("", id="info_volume")
         yield Label("", id="info_feedback_sep")
         yield Label("", id="info_feedback")
@@ -48,7 +51,7 @@ class TrackInfoPanel(Container):
         all_ids = [
             "#info_now_playing", "#info_title", "#info_artist", "#info_sep",
             "#info_album", "#info_genre", "#info_date", "#info_bpm",
-            "#info_feedback_sep", "#info_feedback",
+            "#info_station_mood", "#info_station_rating", "#info_feedback_sep", "#info_feedback",
         ]
 
         if song is None:
@@ -93,25 +96,62 @@ class TrackInfoPanel(Container):
 
         # Feedback history
         entries = feedback_history or []
-        if entries:
-            lines = [
-                "\n[dim]  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·[/dim]",
-                "",
-                "  [bold cyan]◆ FEEDBACK[/bold cyan]",
-            ]
-            for i, entry in enumerate(entries):
-                mood = _squares(int(entry.get("mood_pleasure") or 0), 5, "magenta")
-                energy = _squares(int(entry.get("mood_arousal") or 0), 5, "yellow")
-                rating = _squares(int(entry.get("rating") or 0), 3, "green")
-                lines.append("")
-                lines.append(f"  [dim]MOOD  [/dim]  {mood}")
-                lines.append(f"  [dim]ENERGY[/dim]  {energy}")
-                lines.append(f"  [dim]RATING[/dim]  {rating}")
-                if i < len(entries) - 1:
-                    lines.append("  [dim]─ ─ ─ ─ ─ ─ ─ ─[/dim]")
-
-            self.query_one("#info_feedback_sep", Label).update("")
-            self.query_one("#info_feedback", Label).update("\n".join(lines))
+        lines = [
+            "\n[dim]  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·[/dim]",
+            "",
+            "  [bold cyan]◆ FEEDBACK[/bold cyan]",
+            "",
+        ]
+        if not entries:
+            lines.append("  [dim]None[/dim]")
         else:
-            self.query_one("#info_feedback_sep", Label).update("")
-            self.query_one("#info_feedback", Label).update("")
+            sep = "   [dim]│[/dim]   "
+            moods   = [_squares(int(e.get("mood_pleasure") or 0), 5, "magenta") for e in entries]
+            energies = [_squares(int(e.get("mood_arousal")  or 0), 5, "yellow")  for e in entries]
+            ratings  = [_squares(int(e.get("rating")        or 0), 3, "green") + "    " for e in entries]
+            lines.append(f"  [dim]MOOD  [/dim]  " + sep.join(moods))
+            lines.append(f"  [dim]ENERGY[/dim]  " + sep.join(energies))
+            lines.append(f"  [dim]RATING[/dim]  " + sep.join(ratings))
+
+        self.query_one("#info_feedback_sep", Label).update("")
+        self.query_one("#info_feedback", Label).update("\n".join(lines))
+
+    def set_station_mood(
+        self,
+        pleasure: int | None,
+        arousal: int | None,
+        station_score: float | None = None,
+    ) -> None:
+        """Show the session station mood and per-song rating, or clear both."""
+        mood_lbl   = self.query_one("#info_station_mood",   Label)
+        rating_lbl = self.query_one("#info_station_rating", Label)
+        if pleasure is None or arousal is None:
+            mood_lbl.update("")
+            rating_lbl.update("")
+            return
+
+        # Left: station mood
+        mood   = _squares(pleasure, 5, "magenta")
+        energy = _squares(arousal,  5, "yellow")
+        mood_lbl.update("\n".join([
+            "\n[dim]  ·  ·  ·  ·  ·  ·  ·  ·  ·[/dim]",
+            "",
+            "  [bold magenta]◈ STATION MOOD[/bold magenta]",
+            "",
+            f"  [dim]MOOD  [/dim]  {mood}",
+            f"  [dim]ENERGY[/dim]  {energy}",
+        ]))
+
+        # Right: rating for station
+        if station_score is not None:
+            stars_val = 3.0 + (station_score / 2.0 if station_score >= 0.0 else 2.0 * station_score)
+            stars_int = max(1, min(5, round(stars_val)))
+        else:
+            stars_int = 3
+        rating_lbl.update("\n".join([
+            "\n[dim]  ·  ·  ·  ·  ·  ·  ·  ·  ·[/dim]",
+            "",
+            "  [bold magenta]◈ RATING FOR STATION[/bold magenta]",
+            "",
+            f"  {_squares(stars_int, 5, 'green')}",
+        ]))

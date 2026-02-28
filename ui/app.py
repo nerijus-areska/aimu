@@ -1,3 +1,4 @@
+import math
 import random
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer
@@ -12,6 +13,7 @@ from ui.status_bar import PlayerControlBar
 from ui.track_info import TrackInfoPanel
 from ui.station_view import StationView
 from ui.feedback_modal import FeedbackModal
+from ui.mood_modal import MoodModal
 from ui.help_modal import HelpModal
 from pathlib import Path
 
@@ -79,6 +81,19 @@ class MusicPlayerApp(App):
         padding: 1 2;
     }
 
+    #info_station_row {
+        height: auto;
+        width: 100%;
+    }
+
+    #info_station_mood {
+        width: 1fr;
+    }
+
+    #info_station_rating {
+        width: 1fr;
+    }
+
     PlayerControlBar {
         height: auto;
         dock: bottom;
@@ -125,14 +140,17 @@ class MusicPlayerApp(App):
 
     BINDINGS = _BINDINGS
 
-    def __init__(self):
+    def __init__(self, debug: bool = False):
         super().__init__()
+        self.debug_mode = debug
         self.audio = AudioEngine()
         self.db = MusicDatabase(db_path=DB_PATH)
         self.songs = []
         self.current_index = -1
         self.highlighted_index = -1
         self.station_mode = False
+        self.station_pleasure: int = 3
+        self.station_arousal: int = 3
         self.volume_level: int = DEFAULT_VOLUME // 10
         self.audio.set_volume(DEFAULT_VOLUME)
 
@@ -213,16 +231,84 @@ class MusicPlayerApp(App):
         station.display = self.station_mode
 
         if self.station_mode:
-            self.play_track(self._pick_station_song())
+            def on_mood(result: dict | None) -> None:
+                if result is not None:
+                    self.station_pleasure = result["mood_pleasure"]
+                    self.station_arousal  = result["mood_arousal"]
+                self.play_track(self._pick_station_song())
+
+            self.push_screen(
+                MoodModal(self.station_pleasure, self.station_arousal),
+                on_mood,
+            )
         else:
             # Sync playlist cursor back to the currently playing song
             if 0 <= self.current_index < len(self.songs):
                 playlist.cursor_coordinate = (self.current_index, 0)
             playlist.focus()
+            self._update_info_panel()
+
+    def _song_station_score(self, feedback_history: list) -> float | None:
+        """Return the mood-proximity raw score for a single song, or None if no valid feedback."""
+        RATING_MAP = {1: -1, 2: 1, 3: 4}
+        px, py = self.station_pleasure, self.station_arousal
+        best_score: float | None = None
+        best_dist: float = float("inf")
+        for entry in feedback_history:
+            ep = entry.get("mood_pleasure")
+            ea = entry.get("mood_arousal")
+            er = entry.get("rating")
+            if ep is None or ea is None or er is None:
+                continue
+            raw = RATING_MAP.get(int(er))
+            if raw is None:
+                continue
+            dist = math.sqrt((ep - px) ** 2 + (ea - py) ** 2)
+            if dist < best_dist:
+                best_dist = dist
+                best_score = raw / (1.0 + dist)
+        return best_score
 
     def _pick_station_song(self) -> int:
-        """Return a random song index weighted by 2^(rating-1)."""
-        weights = [2 ** max(0, (song.get("rating") or 1) - 1) for song in self.songs]
+        """Return a random song index weighted by mood-proximity and feedback rating."""
+        RATING_MAP = {1: -1, 2: 1, 3: 4}
+        px, py = self.station_pleasure, self.station_arousal
+
+        raw_scores: list[float] = []
+        for song in self.songs:
+            history = self.db.get_feedback_history(song["path"])
+            best_score: float | None = None
+            best_dist: float = float("inf")
+            for entry in history:
+                ep = entry.get("mood_pleasure")
+                ea = entry.get("mood_arousal")
+                er = entry.get("rating")
+                if ep is None or ea is None or er is None:
+                    continue
+                raw = RATING_MAP.get(int(er))
+                if raw is None:
+                    continue
+                dist = math.sqrt((ep - px) ** 2 + (ea - py) ** 2)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_score = raw / (1.0 + dist)
+            raw_scores.append(best_score if best_score is not None else 0.0)
+
+        # Fixed mapping anchored at 0 → 3 (neutral/no-feedback).
+        # Theoretical raw range: [-1, 4] from RATING_MAP + distance scaling.
+        normalised = [
+            (3.0 + 2.0 * s / 4.0) if s >= 0.0 else (3.0 + 2.0 * s)
+            for s in raw_scores
+        ]
+
+        weights = [2.0 ** (n - 1.0) - 1.0 for n in normalised]
+
+        if self.debug_mode:
+            with open("debug.log", "a") as f:
+                f.write(f"\n--- station pick  mood={px}  arousal={py} ---\n")
+                for song, norm in zip(self.songs, normalised):
+                    f.write(f"  {norm:.2f}  {song['name']}\n")
+
         return random.choices(range(len(self.songs)), weights=weights, k=1)[0]
 
     # ── Playback ──────────────────────────────────────────────────────────────
@@ -268,11 +354,17 @@ class MusicPlayerApp(App):
         panel = self.query_one(TrackInfoPanel)
         if self.highlighted_index < 0 or self.highlighted_index >= len(self.songs):
             panel.set_track(None)
+            panel.set_station_mood(None, None)
             return
         song = self.songs[self.highlighted_index]
         is_playing = self.highlighted_index == self.current_index
         feedback_history = self.db.get_feedback_history(song["path"])
         panel.set_track(song, is_playing=is_playing, feedback_history=feedback_history)
+        if self.station_mode:
+            station_score = self._song_station_score(feedback_history)
+            panel.set_station_mood(self.station_pleasure, self.station_arousal, station_score)
+        else:
+            panel.set_station_mood(None, None)
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
@@ -281,10 +373,15 @@ class MusicPlayerApp(App):
             return
         song = self.songs[self.highlighted_index]
 
-        # Clamp existing mood/rating into the ranges the modal expects.
-        pleasure = int(song.get("mood_pleasure") or 3)
-        arousal  = int(song.get("mood_arousal")  or 3)
-        rating   = max(1, min(3, int(song.get("rating") or 2)))
+        if self.station_mode:
+            # Preselect session mood; land focus on rating
+            pleasure = self.station_pleasure
+            arousal  = self.station_arousal
+        else:
+            pleasure = int(song.get("mood_pleasure") or 3)
+            arousal  = int(song.get("mood_arousal")  or 3)
+
+        rating = max(1, min(3, int(song.get("rating") or 2)))
 
         def on_result(result: dict | None) -> None:
             if result is None:
@@ -306,6 +403,7 @@ class MusicPlayerApp(App):
                 pleasure=pleasure,
                 arousal=arousal,
                 rating=rating,
+                focus_rating=self.station_mode,
             ),
             on_result,
         )

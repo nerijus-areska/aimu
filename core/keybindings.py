@@ -6,8 +6,6 @@ DEFAULT_BINDINGS: list[tuple[str, str, str]] = [
     ("q",     "quit",           "Quit"),
     ("space", "toggle_pause",   "Pause/Resume"),
     ("n",     "next_song",      "Next"),
-    ("]",     "rating_up",      "Rating +1"),
-    ("[",     "rating_down",    "Rating -1"),
     ("s",     "toggle_station", "Station"),
     ("f",     "feedback",       "Feedback"),
     ("left",  "seek_backward",  "- 10s"),
