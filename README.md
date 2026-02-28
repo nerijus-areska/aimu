@@ -8,11 +8,11 @@ Built with [Textual](https://github.com/Textualize/textual), [python-vlc](https:
 
 ## Core Feature: Mood Feedback
 
-Every time you listen to a track, you can rate it in the context of how you feel at that moment:
+Every time you listen to a track, you can rate it in the context of how YOU feel at that moment:
 
-- **Mood** (1–5) — how happy / pleasant the track feels right now
-- **Energy** (1–5) — how energetic / arousing the track feels right now
-- **Rating** (1–3) — your overall preference in this context
+- **Mood** (1–5) — how happy / pleasant do YOU feel right now
+- **Energy** (1–5) — how energetic / arousing do YOU feel right now
+- **Rating** (1–3) — your overall preference for this track in this context
 
 Feedback is stored as an append-only log — every submission is a new record, so your history of impressions over time is preserved. The info panel shows all past feedback entries for the selected track as visual square indicators, displayed side by side.
 
